@@ -1,0 +1,129 @@
+---
+# roles/hardening/tasks/main.yml
+#
+# Idempotent by design: every task here uses Ansible modules (not raw
+# shell) so a second run reports changed=0 once the desired state is
+# reached.
+
+- name: Ensure UFW is installed
+  apt:
+    name: ufw
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Allow SSH through UFW
+  community.general.ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+
+- name: Allow HTTP through UFW
+  community.general.ufw:
+    rule: allow
+    port: "80"
+    proto: tcp
+
+- name: Allow HTTPS through UFW
+  community.general.ufw:
+    rule: allow
+    port: "443"
+    proto: tcp
+
+- name: Allow Kubernetes API through UFW (control-plane only, but harmless on agents)
+  community.general.ufw:
+    rule: allow
+    port: "6443"
+    proto: tcp
+
+- name: Allow Flannel VXLAN between nodes
+  community.general.ufw:
+    rule: allow
+    port: "8472"
+    proto: udp
+
+- name: Allow kubelet metrics between nodes
+  community.general.ufw:
+    rule: allow
+    port: "10250"
+    proto: tcp
+
+- name: Set UFW default deny incoming
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+
+- name: Set UFW default allow outgoing
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled
+
+- name: Disable SSH password authentication (keys only)
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PasswordAuthentication'
+    line: 'PasswordAuthentication no'
+  notify: Restart sshd
+
+- name: Disable SSH root login
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PermitRootLogin'
+    line: 'PermitRootLogin no'
+  notify: Restart sshd
+
+- name: Install fail2ban (optional but recommended)
+  apt:
+    name: fail2ban
+    state: present
+
+- name: Ensure fail2ban is enabled and running
+  systemd:
+    name: fail2ban
+    enabled: yes
+    state: started
+
+- name: Apply any pending unattended security updates config (unattended-upgrades)
+  apt:
+    name: unattended-upgrades
+    state: present
+
+# --- Swap ---
+# t3.micro (1GB RAM) runs k3s + containerd + control-plane components
+# tight enough that a load spike causes the API server to become
+# unresponsive (TLS handshake timeouts) with zero memory headroom.
+# 2GB swap gives it breathing room. This does NOT fix CPU contention
+# on a 1-vCPU box, only memory pressure — if you still see high load
+# average under real workload, consider a bigger instance type.
+- name: Check if swapfile already exists
+  stat:
+    path: /swapfile
+  register: swapfile_stat
+
+- name: Create 2GB swapfile
+  command: fallocate -l 2G /swapfile
+  when: not swapfile_stat.stat.exists
+
+- name: Set swapfile permissions
+  file:
+    path: /swapfile
+    mode: '0600'
+  when: not swapfile_stat.stat.exists
+
+- name: Format swapfile
+  command: mkswap /swapfile
+  when: not swapfile_stat.stat.exists
+
+- name: Enable swapfile
+  command: swapon /swapfile
+  when: not swapfile_stat.stat.exists
+
+- name: Persist swapfile in fstab
+  lineinfile:
+    path: /etc/fstab
+    line: '/swapfile none swap sw 0 0'
+    state: present

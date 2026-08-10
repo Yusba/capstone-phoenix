@@ -1,0 +1,27 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: backend-migrate
+  namespace: taskapp
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: ghcr.io/ts-a-devops/taskapp-backend:5d6b8fc
+          # Confirmed via kubectl exec inspection: this image has no
+          # Flask-Migrate ("flask db" doesn't exist) — it uses raw
+          # Alembic directly, with alembic.ini living in /app. The env
+          # var names (DATABASE_HOST/PORT/NAME/USER/PASSWORD) match our
+          # ConfigMap + Secret exactly, confirmed via migrations/env.py.
+          command: ["sh", "-c", "cd /app && alembic upgrade head"]
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secret
+          env:
+            - name: FLASK_APP
+              value: "app"

@@ -1,0 +1,15 @@
+# inventory/hosts.ini.example
+# Copy this to hosts.ini and fill in real values from `terraform output`
+# (hosts.ini itself is gitignored since it contains real IPs)
+
+[server]
+control-plane ansible_host=CONTROL_PLANE_PUBLIC_IP private_ip=CONTROL_PLANE_PRIVATE_IP
+
+[agents]
+worker-0 ansible_host=WORKER_0_PUBLIC_IP private_ip=WORKER_0_PRIVATE_IP
+worker-1 ansible_host=WORKER_1_PUBLIC_IP private_ip=WORKER_1_PRIVATE_IP
+
+[all:vars]
+ansible_user=ubuntu
+ansible_ssh_private_key_file=~/.ssh/id_rsa
+ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'

@@ -1,0 +1,26 @@
+---
+# install-k3s.yml
+#
+# Usage:
+#   ansible-playbook -i inventory/hosts.ini install-k3s.yml
+#
+# Idempotent: running this twice should report changed=0 on the
+# second run (aside from apt cache checks, which report ok).
+
+- name: Harden all nodes
+  hosts: all
+  become: yes
+  roles:
+    - hardening
+
+- name: Install and configure k3s server (control-plane)
+  hosts: server
+  become: yes
+  roles:
+    - k3s-server
+
+- name: Join workers to the cluster
+  hosts: agents
+  become: yes
+  roles:
+    - k3s-agent

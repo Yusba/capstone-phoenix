@@ -1,0 +1,71 @@
+---
+# roles/k3s-server/tasks/main.yml
+
+- name: Check if k3s is already installed
+  stat:
+    path: /usr/local/bin/k3s
+  register: k3s_binary
+
+# --node-external-ip is intentionally OMITTED here. Setting it caused
+# k3s to advertise the control-plane's PUBLIC IP for internal agent<->
+# server tunnel traffic, which AWS silently blocks (same-VPC "hairpin"
+# traffic via a public/Elastic IP is not routable). This broke worker
+# kubelet connectivity (502 Bad Gateway on the API server's proxy to
+# kubelet, local-path-provisioner crash-looping unable to reach the
+# API). --tls-san alone is enough for kubectl from your laptop to work
+# over the public IP; do not add --node-external-ip back.
+- name: Download and install k3s server
+  shell: |
+    curl -sfL https://get.k3s.io | \
+      INSTALL_K3S_EXEC="server --disable traefik --tls-san={{ ansible_host }}" \
+      sh -
+  when: not k3s_binary.stat.exists
+  args:
+    creates: /usr/local/bin/k3s
+
+- name: Ensure k3s service is enabled and running
+  systemd:
+    name: k3s
+    enabled: yes
+    state: started
+
+- name: Wait for node-token file to exist
+  wait_for:
+    path: /var/lib/rancher/k3s/server/node-token
+    timeout: 120
+
+- name: Read the node token
+  slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: node_token_raw
+
+- name: Set node_token fact for other hosts to use
+  set_fact:
+    k3s_node_token: "{{ node_token_raw.content | b64decode | trim }}"
+
+- name: Wait for kubeconfig to exist
+  wait_for:
+    path: /etc/rancher/k3s/k3s.yaml
+    timeout: 60
+
+- name: Fetch kubeconfig to local machine
+  fetch:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: /tmp/k3s.yaml
+    flat: yes
+
+- name: Rewrite kubeconfig server address to control-plane public IP (runs on localhost)
+  delegate_to: localhost
+  become: no
+  replace:
+    path: /tmp/k3s.yaml
+    regexp: 'https://127\.0\.0\.1:6443'
+    replace: "https://{{ ansible_host }}:6443"
+
+- name: Copy final kubeconfig to project kubeconfig path
+  delegate_to: localhost
+  become: no
+  copy:
+    src: /tmp/k3s.yaml
+    dest: "{{ kubeconfig_dest | default(playbook_dir + '/../kubeconfig') }}"
+    mode: '0600'

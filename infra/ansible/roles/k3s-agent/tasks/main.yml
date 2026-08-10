@@ -1,0 +1,27 @@
+---
+# roles/k3s-agent/tasks/main.yml
+#
+# Relies on the k3s-server role having already run in this same
+# playbook execution, so hostvars['<server host>'].k3s_node_token
+# is available in memory (no fact caching needed for a single run).
+
+- name: Check if k3s agent is already installed
+  stat:
+    path: /usr/local/bin/k3s
+  register: k3s_binary
+
+- name: Download and install k3s agent
+  shell: |
+    curl -sfL https://get.k3s.io | \
+      K3S_URL="https://{{ hostvars[groups['server'][0]]['private_ip'] }}:6443" \
+      K3S_TOKEN="{{ hostvars[groups['server'][0]]['k3s_node_token'] }}" \
+      sh -
+  when: not k3s_binary.stat.exists
+  args:
+    creates: /usr/local/bin/k3s
+
+- name: Ensure k3s-agent service is enabled and running
+  systemd:
+    name: k3s-agent
+    enabled: yes
+    state: started
