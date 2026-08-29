@@ -5,9 +5,7 @@ data "aws_ami" "ubuntu" {
   # if you only changed ssh_cidr — and Terraform treats a changed ami
   # as "replace this instance," destroying and recreating all 3 nodes
   # and wiping the entire cluster. This happened once already.
-  # Pinned to the exact AMI ID currently running on the cluster
-  # (ami-099541a07a9bdb365, eu-west-1, Ubuntu 22.04 amd64) — NOT the
-  # original ami-0325bf62e3737cec6, which would force a replace back.
+  # Pinned to the exact AMI ID currently running on the cluster.
   # To intentionally upgrade the base image later, look up a new AMI
   # ID deliberately and update this filter, right before a planned
   # full rebuild — never let it float automatically.
@@ -39,7 +37,17 @@ resource "aws_instance" "control_plane" {
   # baseline regardless of size, and is also cheaper per-GB than gp2.
   root_block_device {
     volume_type = "gp3"
-    volume_size = 8
+    volume_size = 20
+  }
+
+  # t3 instances are burstable: a "standard" credit mode throttles CPU
+  # hard once your credit balance is depleted (common after sustained
+  # troubleshooting load), which shows up as CPU steal time and makes
+  # everything — including SSH itself — grind to a halt. "unlimited"
+  # removes that ceiling. It's effectively free for short bursts;
+  # only sustained high CPU for a long time incurs extra cost.
+  credit_specification {
+    cpu_credits = "unlimited"
   }
 
   # Extra safety net after an AMI-drift incident wiped this instance
@@ -68,6 +76,10 @@ resource "aws_instance" "worker" {
   root_block_device {
     volume_type = "gp3"
     volume_size = 8
+  }
+
+  credit_specification {
+    cpu_credits = "unlimited"
   }
 
   lifecycle {
