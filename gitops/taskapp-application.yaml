@@ -9,6 +9,8 @@ spec:
     repoURL: https://github.com/Yusba/capstone-phoenix.git
     targetRevision: HEAD
     path: manifests
+    directory:
+      recurse: true
   destination:
     server: https://kubernetes.default.svc
     namespace: taskapp
