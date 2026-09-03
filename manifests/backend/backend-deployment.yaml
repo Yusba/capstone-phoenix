@@ -29,9 +29,18 @@ spec:
             matchLabels:
               app: backend
       terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: backend
           image: ghcr.io/ts-a-devops/taskapp-backend:5d6b8fc
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           ports:
             - containerPort: 5000
           envFrom:
