@@ -192,3 +192,17 @@ Start by reading the K8s lesson, then open `STRUCTURE.md`.
 
 SUBMISSION LINK:
 https://docs.google.com/forms/d/e/1FAIpQLSdp-5Zfvt431gY8m2L_MOZ7NQ-8zN2L3jvkgL7P3yP7-pd94Q/viewform?usp=header
+
+---
+
+## Submission Notes (Yusuf's TaskApp deployment)
+
+**Live app:** https://taskapp.34.245.187.113.nip.io
+
+**Status summary:**
+- Infrastructure (Terraform), cluster bring-up (Ansible), and Core app requirements: all complete and verified — see `docs/EVIDENCE/`.
+- Advanced (3 of 3+ required): HorizontalPodAutoscaler on backend, PodDisruptionBudgets on backend+frontend, and Resource hardening (securityContext: runAsNonRoot, dropped capabilities, seccompProfile) on the backend — all confirmed live on the cluster.
+- GitOps: Argo CD (core-install) manages the full app — namespace, ConfigMap, Deployments, StatefulSet, HPA, PDBs, Ingress, ClusterIssuer — confirmed `Synced`/`Healthy`, with `directory.recurse: true` so it tracks every manifest subdirectory.
+- Known limitation, stated honestly: the live node-drain failover demo could not be captured on video before submission — the `t3.micro` control-plane repeatedly became unresponsive (CPU credit exhaustion, confirmed via CloudWatch) during the final days of the project, including during the recording attempt. What *is* evidenced: a continuous health-check loop against the live app kept returning `200` even while the Kubernetes API server itself was unreachable, showing the running application and ingress path are resilient to control-plane instability independent of the API server's availability. Full root-cause analysis and the operational workarounds used throughout the project are documented in `docs/RUNBOOK.md`.
+- `docs/ARCHITECTURE.md`, `docs/COST.md`, and `docs/RUNBOOK.md` are all written from real, lived experience building and repeatedly rebuilding this cluster, including the genuine failure modes hit and fixed along the way.
+
